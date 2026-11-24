@@ -144,7 +144,8 @@ const AUDIO_DETAIL = [
 
 
 const HITBOX = {
-	headpat: { xMin: 550, xMax: 900, yMin: 130, yMax: 410 },
+	headpat: { xMin: 570, xMax: 1050, yMin: -105, yMax: 300, start: 'Pat2_01_M', end: 'PatEnd2_01_M' },
+	facepat: { xMin: 700, xMax: 1030, yMin: 300, yMax: 537, start: 'Pat_01_M', end: 'PatEnd_01_M' },
 	voiceline: { xMin: 1060, xMax: 1690, yMin: 600, yMax: 1100 }
 };
 
@@ -283,17 +284,21 @@ function t(n, side) {
 	return (n + (d[side].length / (transpose * 2))) * transpose;
 }
 
-// -1 = [No Entry], 1 = Headpat, 2 = Voiceline, 3 = Eye Track
+function isInsideHitbox(x, y, box) {
+	return x >= box.xMin && x < box.xMax && y >= box.yMin && y < box.yMax;
+}
+
+// -1 = No interaction, 1 = Pat, 2 = Voiceline, 3 = Eye tracking
 function pressedMouse(x, y) {
-	tx = t(x, 'x');
-	ty = t(y, 'y');
-	if (tx > HITBOX.headpat.xMin && tx < HITBOX.headpat.xMax && ty > HITBOX.headpat.yMin && ty < HITBOX.headpat.yMax && mouseOptions.headpatting) {
-		spineData.state.setAnimation(1, 'Pat_01_M', false);
-		// if (HAS_A.point) spineData.state.setAnimation(2, 'Pat_01_A', false);
-		headpatOrigin = { x, y };
+	const tx = t(x, 'x');
+	const ty = t(y, 'y');
+	const pat = [HITBOX.headpat, HITBOX.facepat].find(box => isInsideHitbox(tx, ty, box));
+	if (pat && mouseOptions.headpatting) {
+		spineData.state.setAnimation(1, pat.start, false);
+		headpatOrigin = { x, y, endAnimation: pat.end };
 		mouseSelect = 1;
 	}
-	else if (tx > HITBOX.voiceline.xMin && tx < HITBOX.voiceline.xMax && ty > HITBOX.voiceline.yMin && ty < HITBOX.voiceline.yMax && mouseOptions.voicelines) {
+	else if (isInsideHitbox(tx, ty, HITBOX.voiceline) && mouseOptions.voicelines) {
 		mouseSelect = 2;
 	}
 	else if (mouseOptions.mousetracking) {
@@ -389,10 +394,11 @@ function movedMouse(x, y) {
 function releasedMouse() {
 	switch (mouseSelect) {
 		case 1: {
+			const { endAnimation } = headpatOrigin;
 			headpatOrigin = null;
 			headpatTarget.set(0, 0);
 			const state = spineData.state;
-			const motion = state.setAnimation(1, 'PatEnd_01_M', false);
+			const motion = state.setAnimation(1, endAnimation, false);
 			state.addEmptyAnimation(1, 0.5, motion.animationEnd);
 			state.addEmptyAnimation(2, 0.5, 0);
 			headpatCooldown = setTimeout(() => {
@@ -485,7 +491,7 @@ function init() {
 			if (props.drawHitboxes) mouseOptions.drawHitboxes = props.drawHitboxes.value;
 			if (props.lensflare) {
 				showLensflare = props.lensflare.value;
-				if (showLensflare) restoreSpecifiedSlots();
+				updateLensflareOpacity();
 			}
 
 			// 监听模型分辨率设置
@@ -588,8 +594,6 @@ function reloadModel() {
 		bgm = null;
 	}
 	
-	slotsHidden = false;
-
 	// Stop all intro audio and clear related timeouts
 	introAudioIsPlaying = false;
 	
@@ -699,8 +703,7 @@ function interactionLoad() {
 function load(dynamicBinaryPath, dynamicAtlasPath) {
 	spineData = loadSpineData(dynamicBinaryPath, dynamicAtlasPath, false);
 
-	// 在设置动画之前隐藏指定的骨骼
-	hideSpecifiedSlots();
+	updateLensflareOpacity();
 
 	// User Option to skip Intro Animation
 	if (introAnimation) {
@@ -772,44 +775,19 @@ function calculateSetupPoseBounds(skeleton) {
 	return { offset: offset, size: size };
 }
 
-let showLensflare = false;
-let slotsHidden = false;
+let showLensflare = true;
+const LENSFLARE_SLOTS = ['FX_1', 'FX_2'];
+const LENSFLARE_OPACITY = 0.24;
 
-// 定义需要隐藏的骨骼名称列表（全局变量）
-const slotsToHide = [
-'FX_1', 'FX_2'
-];
-
-function hideSpecifiedSlots() {
-	if (!showLensflare && spineData && spineData.skeleton) {
-		let foundSlots = 0;
-		let totalSlots = slotsToHide.length;
-		
-		// 遍历并隐藏所有指定的骨骼（每次渲染都执行）
-		slotsToHide.forEach(slotName => {
-			let slot = spineData.skeleton.findSlot(slotName);
-			if (slot) {
-				slot.setAttachment(null);
-				foundSlots++;
-			}
-		});
-		
-		// 只在首次执行时显示调试信息
-		// if (!slotsHidden) {
-		// 	console.log("总共尝试隐藏 " + totalSlots + " 个骨骼，成功隐藏 " + foundSlots + " 个");
-		// 	slotsHidden = true;
-		// }
-	}
-}
-
-function restoreSpecifiedSlots() {
-	if (spineData && spineData.skeleton) {
-		slotsToHide.forEach(slotName => {
-			let slot = spineData.skeleton.findSlot(slotName);
-			if (slot && slot.data.attachmentName) {
-				slot.setAttachment(spineData.skeleton.getAttachment(slot.data.index, slot.data.attachmentName));
-			}
-		});
+function updateLensflareOpacity() {
+	if (!spineData) return;
+	const skeleton = spineData.skeleton;
+	const opacity = showLensflare ? LENSFLARE_OPACITY : 0;
+	// Attachment opacity scales the additive glow without overriding animated slot alpha.
+	for (const name of LENSFLARE_SLOTS) {
+		const slot = skeleton.findSlot(name);
+		const attachment = skeleton.getAttachment(slot.data.index, slot.data.attachmentName);
+		attachment.color.a = opacity;
 	}
 }
 
@@ -830,9 +808,6 @@ function render() {
         let premultipliedAlpha = spineData.premultipliedAlpha;
         state.update(delta);
 		state.apply(skeleton);
-		
-		// 在渲染时检查并隐藏指定的骨骼
-		hideSpecifiedSlots();
 
         const pointX = TPoint.x;
         const pointY = TPoint.y;
