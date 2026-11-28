@@ -49,7 +49,8 @@ const subtitleLocales = {
 	Chinese: 'zh-Hans',
 	TraditionalChinese: 'zh-Hant',
 	Japanese: 'ja',
-	Korean: 'ko'
+	Korean: 'ko',
+	Thai: 'th'
 };
 let isVoicelinePlaying = false;
 
@@ -86,7 +87,8 @@ const AUDIO_DETAIL = [
                 "상사, 미안해",
                 "태양은 내가 예상했던 것보다 훨씬 강해...",
                 "잠깐만요"
-            ]
+            ],
+            Thai: ["อา... คุณครู ขอโทษนะ","แดดแรงกว่าที่คิดไว้... ฉันประมาทไปหน่อย","ขอ... พักสักหน่อย..."]
         }
     },
     {
@@ -115,7 +117,8 @@ const AUDIO_DETAIL = [
                 "괜찮아, 잠깐 회복되겠다",
                 "요즘은 좀 더 부드러워졌어요. 정말 연습이 안 되는 거 보여요.",
                 "지금부터 당신을 실망시키지 않겠습니다. 정말 죄송합니다."
-            ]
+            ],
+            Thai: ["...อืม ไม่เป็นไร เดี๋ยวก็หาย","พักหลังฉันคงหย่อนยานไปมาก รู้เลยว่าฝึกไม่พอ","ต่อไปฉันจะไม่ทำให้คุณครูผิดหวังอีก... ขอโทษจริง ๆ นะ"]
         }
     },
     {
@@ -144,7 +147,8 @@ const AUDIO_DETAIL = [
                 "앗!",
                 "사과해야 할 일이 아니죠?",
                 "옛날에는 이런 짓을 한 적도 많았어"
-            ]
+            ],
+            Thai: ["...อ๊ะ","ไม่ใช่เรื่องที่ต้องขอโทษงั้นเหรอ... เข้าใจแล้ว","ถ้าเป็นเมื่อก่อน... ฉันคงโดนดุหนักเลย เผลอขอโทษไปเพราะติดเป็นนิสัยน่ะ"]
         }
     },
     {
@@ -173,7 +177,8 @@ const AUDIO_DETAIL = [
                 "바람이 불고 있습니다.",
                 "그 때, 나는 바람의 방향을 확인하고, 그 방향이 궤도에 어떤 영향을 미치는지 확인하고",
                 "하지만 지금은 달라요"
-            ]
+            ],
+            Thai: ["...ลมพัดมาแล้ว","เมื่อก่อนฉันคอยดูทิศทางลม คิดว่าจะกระทบวิถีกระสุนยังไง... ต้องคอยระวังตั้งหลายอย่าง","แต่ตอนนี้ต่างออกไปแล้ว"]
         }
     },
     {
@@ -197,7 +202,8 @@ const AUDIO_DETAIL = [
             Korean: [
                 "그저 시원하고…… 기분이 좋아서—",
                 "그리고 당신과 함께 느낄 수 있게 되는데, 선생님... 정말 행복해 합니다."
-            ]
+            ],
+            Thai: ["แค่รู้สึกเย็นสบาย... แล้วก็สดชื่น—","ได้สัมผัสความรู้สึกนี้ไปด้วยกันกับคุณครู... ฉันมีความสุขจัง"]
         }
     }
 ];
@@ -323,7 +329,7 @@ function playVoiceline() {
 			track.play().catch(finish);
 
 			if (dialogBox) {
-				textbox.textContent = dialog[window.selectedLanguage][index];
+				textbox.textContent = getSubtitleText(dialog, window.selectedLanguage, index);
 				textbox.style.opacity = 1;
 			}
 		},
@@ -503,6 +509,16 @@ function setMouse(event) {
 	return { x: ax - canvas.width * positionX, y: ay - canvas.height * positionY };
 }
 
+function getSubtitleText(dialog, language, index) {
+	let text = dialog?.[language]?.[index];
+	if (text == null && language === 'Thai') {
+		language = 'English';
+		text = dialog?.[language]?.[index];
+	}
+	textbox.lang = subtitleLocales[language];
+	return text ?? "";
+}
+
 function updateSubtitleLanguage() {
 	let language = subtitleLanguagePreference;
 	if (language === 'auto') {
@@ -516,6 +532,8 @@ function updateSubtitleLanguage() {
 			language = 'Japanese';
 		} else if (primary === 'ko' || primary === 'korean' || primary === 'koreana') {
 			language = 'Korean';
+		} else if (primary === 'th' || primary === 'thai') {
+			language = 'Thai';
 		} else {
 			language = 'English';
 		}
@@ -525,7 +543,7 @@ function updateSubtitleLanguage() {
 	window.selectedLanguage = language;
 	textbox.lang = subtitleLocales[language];
 	const clip = currentTracks.at(-1);
-	if (dialogBox && clip) textbox.textContent = clip.dialog[language][clip.index];
+	if (dialogBox && clip) textbox.textContent = getSubtitleText(clip.dialog, language, clip.index);
 }
 
 function init() {
